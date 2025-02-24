@@ -84,15 +84,21 @@ class TelegramBot:
 bot = TelegramBot()
 
 async def github_repo_exists(repo_name: str) -> bool:
-    """Checks if the given GitHub repository exists"""
+    """Checks if the given GitHub repository exists with authentication"""
     github_api_url = f"https://api.github.com/repos/{repo_name}"
+    github_token = os.getenv("GITHUB_TOKEN")  # Store token in environment variable
+
+    headers = {}
+    if github_token:
+        headers["Authorization"] = f"token {github_token}"
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(github_api_url)
+        response = await client.get(github_api_url, headers=headers)
 
     logging.info(f"Checked GitHub repo: {repo_name}, Status: {response.status_code}")
     
     return response.status_code == 200
+
 
 # Dependency to get database session
 def get_db():
