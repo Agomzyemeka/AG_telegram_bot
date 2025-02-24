@@ -126,13 +126,14 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
         return await bot.send_message(chat_id, "Welcome to *AG Telegram Bot*!\n\nEnter your GitHub repository in the format: `username/repository_name`.\n\nExample: `agomzy/awesome-project`")
 
     elif state == "waiting_for_repo":
-        if not re.match(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", text):
+        repo_name = text  # Extract user input
+        if not re.match(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", repo_name):
             return await bot.send_message(chat_id, "❌ Invalid format! Enter your repository as `username/repository_name`.\nExample: `agomzy/awesome-project`")
-
-        if not await github_repo_exists(text):
+            
+        if not await github_repo_exists(repo_name):
             return await bot.send_message(chat_id, "❌ Repository not found! Check the repository name and try again.")
-
-        USER_DATA[chat_id]["github_repo"] = text
+            
+        USER_DATA[chat_id]["github_repo"] = repo_name
         USER_STATES[chat_id] = "waiting_for_api_key"
         return await bot.send_message(chat_id, "Great! Now, enter your API Key or type 'none' to generate one.")
 
