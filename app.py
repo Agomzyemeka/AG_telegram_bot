@@ -9,7 +9,12 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime
 import re
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+
+# Initialize FastAPI app and security
 app = FastAPI()
 security = HTTPBearer()
 
@@ -26,13 +31,14 @@ Base = declarative_base()
 class Integration(Base):
     __tablename__ = "integrations"
     
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     github_repo = Column(String, index=True)
     chat_id = Column(String)
     created_at = Column(String, default=lambda: datetime.utcnow().isoformat())
     api_key = Column(String, unique=True)
 
-Base.metadata.create_all(bind=engine)  # Create tables
+# Create database tables
+Base.metadata.create_all(bind=engine)
 
 # Pydantic model for handling GitHub webhook payload
 class GitHubWebhook(BaseModel):
@@ -54,6 +60,9 @@ class GitHubWebhook(BaseModel):
 class TelegramBot:
     def __init__(self):
         self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+        if not self.bot_token:
+            raise ValueError("TELEGRAM_BOT_TOKEN is required")
+
         self.api_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
 
     async def send_message(self, chat_id: str, message: str):
@@ -65,6 +74,7 @@ class TelegramBot:
                 "disable_web_page_preview": True
             })
             if response.status_code != 200:
+                logging.error(f"Failed to send message to {chat_id}. Response: {response.text}")
                 raise HTTPException(status_code=500, detail="Failed to send Telegram message")
 
 bot = TelegramBot()
@@ -76,6 +86,8 @@ async def github_repo_exists(repo_name: str) -> bool:
     async with httpx.AsyncClient() as client:
         response = await client.get(github_api_url)
 
+    logging.info(f"Checked GitHub repo: {repo_name}, Status: {response.status_code}")
+    
     return response.status_code == 200
 
 # Dependency to get database session
@@ -94,7 +106,7 @@ USER_DATA = {}
 async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
     """Handles incoming Telegram messages and guides user setup"""
     data = await request.json()
-
+    
     if "message" not in data:
         return {"status": "ignored"}
 
@@ -107,6 +119,8 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 
     state = USER_STATES[chat_id]
 
+    logging.info(f"Received message: {text} from chat_id: {chat_id} (State: {state})")
+
     if text == "/start":
         USER_STATES[chat_id] = "waiting_for_repo"
         return await bot.send_message(chat_id, "Welcome to *AG Telegram Bot*!\n\nEnter your GitHub repository in the format: `username/repository_name`.\n\nExample: `agomzy/awesome-project`")
@@ -114,8 +128,10 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
     elif state == "waiting_for_repo":
         if not re.match(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", text):
             return await bot.send_message(chat_id, "❌ Invalid format! Enter your repository as `username/repository_name`.\nExample: `agomzy/awesome-project`")
+
         if not await github_repo_exists(text):
             return await bot.send_message(chat_id, "❌ Repository not found! Check the repository name and try again.")
+
         USER_DATA[chat_id]["github_repo"] = text
         USER_STATES[chat_id] = "waiting_for_api_key"
         return await bot.send_message(chat_id, "Great! Now, enter your API Key or type 'none' to generate one.")
@@ -124,24 +140,10 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
         if text.lower() == "none":
             api_key = os.urandom(16).hex()
             USER_DATA[chat_id]["api_key"] = api_key
-            message = (
-                f"✅ *GitHub Integration Complete!*\n\n"
-                f"Your repository `{USER_DATA[chat_id]['github_repo']}` is now connected.\n"
-                f"*API Key:* `{api_key}`\n\n"
-                f"🔹 *How to Add API Key to GitHub Secrets:*\n"
-                f"1. Go to your repository on GitHub.\n"
-                f"2. Navigate to *Settings* > *Secrets and variables* > *Actions*.\n"
-                f"3. Click *New repository secret*.\n"
-                f"4. Name it `API_TOKEN` and paste the API Key above.\n"
-                f"5. Save and you're done!"
-            )
-            await bot.send_message(chat_id, message)
         else:
             USER_DATA[chat_id]["api_key"] = text
 
-        USER_STATES[chat_id] = "done"
-
-        # Save integration to database
+        # Save integration to the database
         new_integration = Integration(
             github_repo=USER_DATA[chat_id]["github_repo"],
             chat_id=chat_id,
@@ -150,6 +152,21 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
         db.add(new_integration)
         db.commit()
 
+        # Send confirmation message
+        message = (
+            f"✅ *GitHub Integration Complete!*\n\n"
+            f"Your repository `{USER_DATA[chat_id]['github_repo']}` is now connected.\n"
+            f"*API Key:* `{USER_DATA[chat_id]['api_key']}`\n\n"
+            f"🔹 *How to Add API Key to GitHub Secrets:*\n"
+            f"1. Go to your repository on GitHub.\n"
+            f"2. Navigate to *Settings* > *Secrets and variables* > *Actions*.\n"
+            f"3. Click *New repository secret*.\n"
+            f"4. Name it `API_TOKEN` and paste the API Key above.\n"
+            f"5. Save and you're done!"
+        )
+        await bot.send_message(chat_id, message)
+
+        # Cleanup user data
         del USER_STATES[chat_id]
         del USER_DATA[chat_id]
 
@@ -165,6 +182,7 @@ async def handle_github_webhook(
 ):
     """Handles GitHub webhook notifications"""
     integration = db.query(Integration).filter_by(api_key=credentials.credentials).first()
+    
     if not integration:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
@@ -188,5 +206,4 @@ async def handle_github_webhook(
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", "8000"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
