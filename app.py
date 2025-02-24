@@ -189,19 +189,38 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/notifications/github")
 async def handle_github_webhook(
-    webhook: GitHubWebhook,
-    credentials: HTTPAuthorizationCredentials = Security(security),
+    request: Request,  # Accept raw request data
+    credentials: HTTPAuthorizationCredentials = Security(security, auto_error=False),  # Allow missing auth
     db: Session = Depends(get_db)
 ):
     """Handles GitHub webhook notifications"""
-    integration = db.query(Integration).filter_by(api_key=credentials.credentials).first()
     
+    data = await request.json()  # Get the full JSON payload
+    
+    # ✅ Handle "ping" events without authentication
+    if request.headers.get("X-GitHub-Event") == "ping":
+        return {"status": "ok", "message": "Ping received successfully"}
+
+    # ✅ Check for missing credentials (other requests require auth)
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # ✅ Parse the webhook payload
+    try:
+        webhook = GitHubWebhook(**data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid payload: {str(e)}")
+
+    # ✅ Validate API key
+    integration = db.query(Integration).filter_by(api_key=credentials.credentials).first()
     if not integration:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
+    # ✅ Validate repository match
     if integration.github_repo != webhook.repository:
         raise HTTPException(status_code=403, detail="Repository mismatch")
 
+    # ✅ Format message for Telegram
     message = (
         f"🔔 *GitHub Workflow Update*\n\n"
         f"*Repository:* `{webhook.repository}`\n"
@@ -216,6 +235,7 @@ async def handle_github_webhook(
     await bot.send_message(integration.chat_id, message)
 
     return {"status": "success", "message": "Notification sent"}
+
 
 if __name__ == "__main__":
     import uvicorn
