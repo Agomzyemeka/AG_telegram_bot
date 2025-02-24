@@ -1,0 +1,26 @@
+name: Notify Telegram
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send webhook notification
+        run: |
+          curl -X POST "https://telex-cicd.onrender.com/notifications/github" \
+          -H "Authorization: Bearer ${{ secrets.API_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "repository": "${{ github.repository }}",
+            "workflow": "${{ github.workflow }}",
+            "status": "${{ job.status }}",
+            "actor": "${{ github.actor }}",
+            "run_id": "${{ github.run_id }}",
+            "run_number": "${{ github.run_number }}",
+            "ref": "${{ github.ref }}"
+          }'
