@@ -189,32 +189,39 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/notifications/github")
 async def handle_github_webhook(
-    request: Request,  # Accept raw request data
-    credentials: HTTPAuthorizationCredentials | None = Security(security),  # ✅ Allow None # Allow missing auth
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Security(security),  # Allow None (for ping)
     db: Session = Depends(get_db)
 ):
     """Handles GitHub webhook notifications"""
-    
-    data = await request.json()  # Get the full JSON payload
-    
-    # ✅ Handle "ping" events without authentication
-    if request.headers.get("X-GitHub-Event") == "ping":
+
+    # ✅ Extract event type from headers
+    event_type = request.headers.get("X-GitHub-Event", "").lower()
+
+    # ✅ Get the JSON payload
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    # ✅ Allow "ping" event through WITHOUT authentication
+    if event_type == "ping":
         return {"status": "ok", "message": "Ping received successfully"}
 
-    # ✅ Check for missing credentials (other requests require auth)
+    # ✅ Enforce authentication for all other events
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
-
-    # ✅ Parse the webhook payload
-    try:
-        webhook = GitHubWebhook(**data)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid payload: {str(e)}")
 
     # ✅ Validate API key
     integration = db.query(Integration).filter_by(api_key=credentials.credentials).first()
     if not integration:
         raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # ✅ Parse webhook payload into Pydantic model
+    try:
+        webhook = GitHubWebhook(**data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid payload: {str(e)}")
 
     # ✅ Validate repository match
     if integration.github_repo != webhook.repository:
