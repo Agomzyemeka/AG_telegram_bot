@@ -87,6 +87,8 @@ async def github_repo_exists(repo_name: str) -> bool:
     """Checks if the given GitHub repository exists with authentication"""
     github_api_url = f"https://api.github.com/repos/{repo_name}"
     github_token = os.getenv("GITHUB_TOKEN")  # Store token in environment variable
+    
+    logging.info(f"GITHUB_TOKEN is set: {bool(github_token)}")  # ✅ Add this line
 
     headers = {}
     if github_token:
