@@ -69,6 +69,15 @@ class TelegramBot:
 
 bot = TelegramBot()
 
+async def github_repo_exists(repo_name: str) -> bool:
+    """Checks if the given GitHub repository exists"""
+    github_api_url = f"https://api.github.com/repos/{repo_name}"
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(github_api_url)
+
+    return response.status_code == 200
+
 # Dependency to get database session
 def get_db():
     db = SessionLocal()
@@ -116,11 +125,15 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
             api_key = os.urandom(16).hex()
             USER_DATA[chat_id]["api_key"] = api_key
             message = (
-                f"🔗 *GitHub Integration Setup Complete*\n\n"
-                f"Your GitHub repository `{USER_DATA[chat_id]['github_repo']}` has been connected to this chat.\n"
-                f"You will receive notifications for workflow runs here.\n\n"
-                f"Your API Key: `{api_key}`\n"
-                f"Add this key to your GitHub repository secrets as `API_TOKEN` in *Settings > Secrets and variables > Actions*"
+                f"✅ *GitHub Integration Complete!*\n\n"
+                f"Your repository `{USER_DATA[chat_id]['github_repo']}` is now connected.\n"
+                f"*API Key:* `{api_key}`\n\n"
+                f"🔹 *How to Add API Key to GitHub Secrets:*\n"
+                f"1. Go to your repository on GitHub.\n"
+                f"2. Navigate to *Settings* > *Secrets and variables* > *Actions*.\n"
+                f"3. Click *New repository secret*.\n"
+                f"4. Name it `API_TOKEN` and paste the API Key above.\n"
+                f"5. Save and you're done!"
             )
             await bot.send_message(chat_id, message)
         else:
