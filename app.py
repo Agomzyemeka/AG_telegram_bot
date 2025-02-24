@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, Security, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 import httpx
 import os
 import json
@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, Column, String, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime
+import re
 
 app = FastAPI()
 security = HTTPBearer()
@@ -42,6 +43,12 @@ class GitHubWebhook(BaseModel):
     run_id: str
     run_number: str
     ref: str
+
+    @validator("repository")
+    def validate_repository(cls, v):
+        if not re.match(r"^[a-zA-Z0-9-_]+/[a-zA-Z0-9-_]+$", v):
+            raise ValueError("Invalid repository format. Expected format: username/repository_name")
+        return v
 
 # Telegram bot class to send messages
 class TelegramBot:
@@ -93,12 +100,16 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 
     if text == "/start":
         USER_STATES[chat_id] = "waiting_for_repo"
-        return await bot.send_message(chat_id, "Welcome! Let's set up your integration.\n\nPlease enter your GitHub repository name:")
+        return await bot.send_message(chat_id, "Welcome to *AG Telegram Bot*!\n\nEnter your GitHub repository in the format: `username/repository_name`.\n\nExample: `agomzy/awesome-project`")
 
     elif state == "waiting_for_repo":
+        if not re.match(r"^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", text):
+            return await bot.send_message(chat_id, "❌ Invalid format! Enter your repository as `username/repository_name`.\nExample: `agomzy/awesome-project`")
+        if not await github_repo_exists(text):
+            return await bot.send_message(chat_id, "❌ Repository not found! Check the repository name and try again.")
         USER_DATA[chat_id]["github_repo"] = text
         USER_STATES[chat_id] = "waiting_for_api_key"
-        return await bot.send_message(chat_id, "Got it! Now, please enter your API Key, or type 'none' if you don't have one:")
+        return await bot.send_message(chat_id, "Great! Now, enter your API Key or type 'none' to generate one.")
 
     elif state == "waiting_for_api_key":
         if text.lower() == "none":
@@ -109,7 +120,7 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
                 f"Your GitHub repository `{USER_DATA[chat_id]['github_repo']}` has been connected to this chat.\n"
                 f"You will receive notifications for workflow runs here.\n\n"
                 f"Your API Key: `{api_key}`\n"
-                f"Add this key to your GitHub repository secrets as `API_TOKEN`"
+                f"Add this key to your GitHub repository secrets as `API_TOKEN` in *Settings > Secrets and variables > Actions*"
             )
             await bot.send_message(chat_id, message)
         else:
@@ -136,7 +147,7 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 @app.post("/notifications/github")
 async def handle_github_webhook(
     webhook: GitHubWebhook,
-    credentials: HTTPAuthorizationCredentials = Security (security),
+    credentials: HTTPAuthorizationCredentials = Security(security),
     db: Session = Depends(get_db)
 ):
     """Handles GitHub webhook notifications"""
