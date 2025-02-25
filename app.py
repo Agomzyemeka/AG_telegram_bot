@@ -199,7 +199,7 @@ def verify_github_signature(request: Request, api_key: str, received_signature: 
         raise HTTPException(status_code=401, detail="Missing Webhook Secret or Signature")
 
     # ✅ Compute expected signature using the API key stored in the database
-    payload = request.body()
+    payload = await request.body()
     expected_signature = hmac.new(
         api_key.encode(),  # Use the API key from the DB
         payload,
