@@ -228,6 +228,7 @@ async def handle_github_webhook(
     # ✅ Get the JSON payload
     try:
         data = await request.json()
+        logging.info(f"Raw payload received: {data}")
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
