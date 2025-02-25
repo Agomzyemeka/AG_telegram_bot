@@ -199,12 +199,12 @@ async def handle_github_webhook(
 
     # ✅ Extract event type from headers
     event_type = request.headers.get("X-GitHub-Event", "").lower()
-    webhook_secret = request.headers.get("X-Hub-Signature-256", "").replace("sha256=", "")
+    webhook_secret = request.headers.get("X-Hub-Signature-256", "").replace("sha256=", "").strip()
 
     # ✅ Get the JSON payload
     try:
         data = await request.json()
-    except json.JSONDecodeError:
+    except json.ValueError:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     # ✅ Allow "ping" event through WITHOUT authentication
@@ -223,7 +223,7 @@ async def handle_github_webhook(
         raise HTTPException(status_code=400, detail=f"Invalid payload: {str(e)}")
 
     # ✅ Validate repository match
-    if integration.github_repo != webhook.repository:
+    if integration.github_repo.lower() != webhook.repository:
         raise HTTPException(status_code=403, detail="Repository mismatch")
 
     # ✅ Format message for Telegram
