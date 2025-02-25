@@ -47,14 +47,17 @@ class Integration(Base):
 Base.metadata.create_all(bind=engine)
 
 # Pydantic model for handling GitHub webhook payload
+class RepositoryInfo(BaseModel):
+    full_name: str
+    
 class GitHubWebhook(BaseModel):
-    repository: str
-    workflow: str
-    status: str
-    actor: str
-    run_id: str
-    run_number: str
-    ref: str
+    repository: RepositoryInfo  # Accepts a dictionary, not a string
+    workflow: str | None = None  # Allow missing fields to be optional
+    status: str | None = None
+    actor: str | None = None
+    run_id: str | None = None
+    run_number: str | None = None
+    ref: str | None = None
 
     @validator("repository")
     def validate_repository(cls, v):
@@ -234,7 +237,7 @@ async def handle_github_webhook(
 
     # ✅ Extract repository name from the webhook payload
     try:
-        repo_name = data.get("repository", {}).get("full_name", "").lower()
+        repo_name = data.repository.full_name.lower()  # Now correctly accesses `full_name`
     except AttributeError:
         raise HTTPException(status_code=400, detail="Missing repository information")
         
@@ -259,7 +262,7 @@ async def handle_github_webhook(
     api_key = integration.api_key
 
     # ✅ Verify GitHub signature using the stored API key
-    verify_github_signature(request, api_key, received_signature)
+    await verify_github_signature(request, api_key, received_signature)
 
     # ✅ Parse webhook payload into Pydantic model
     try:
