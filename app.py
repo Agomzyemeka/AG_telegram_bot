@@ -237,11 +237,21 @@ async def handle_github_webhook(
         repo_name = data.get("repository", {}).get("full_name", "").lower()
     except AttributeError:
         raise HTTPException(status_code=400, detail="Missing repository information")
+        
 
     # ✅ Fetch integration details using repo name
     integration = db.query(Integration).filter_by(github_repo=repo_name).first()
     if not integration:
+        logging.warning(f"🚨 No matching integration found! Received repo: {repo_name}")
+    
+        # ✅ Fetch all stored repo names for debugging
+        stored_repos = [i.github_repo for i in db.query(Integration.github_repo).all()]
+        logging.warning(f"🔍 Stored repositories in DB: {stored_repos}")
+        
         raise HTTPException(status_code=403, detail="No matching integration found for repository")
+        
+    # ✅ Log the matching repo
+    logging.info(f"✅ Found integration for repo: {repo_name} -> Stored as: {integration.github_repo}")
 
     # ✅ Extract API key from the integration entry
     api_key = integration.api_key
