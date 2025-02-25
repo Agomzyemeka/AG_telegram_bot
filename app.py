@@ -47,9 +47,17 @@ class Integration(Base):
 Base.metadata.create_all(bind=engine)
 
 # Pydantic model for handling GitHub webhook payload
+# Model for repository details
 class RepositoryInfo(BaseModel):
     full_name: str
-    
+
+    @validator("full_name")
+    def validate_full_name(cls, v):
+        if not re.match(r"^[a-zA-Z0-9-_]+/[a-zA-Z0-9-_]+$", v):
+            raise ValueError("Invalid repository format. Expected format: username/repository_name")
+        return v
+
+# Main Webhook Model
 class GitHubWebhook(BaseModel):
     repository: RepositoryInfo  # Accepts a dictionary, not a string
     workflow: str | None = None  # Allow missing fields to be optional
@@ -58,13 +66,8 @@ class GitHubWebhook(BaseModel):
     run_id: str | None = None
     run_number: str | None = None
     ref: str | None = None
-
-    @validator("repository")
-    def validate_repository(cls, v):
-        if not re.match(r"^[a-zA-Z0-9-_]+/[a-zA-Z0-9-_]+$", v):
-            raise ValueError("Invalid repository format. Expected format: username/repository_name")
-        return v
-
+    
+    
 # Telegram bot class to send messages
 class TelegramBot:
     def __init__(self):
