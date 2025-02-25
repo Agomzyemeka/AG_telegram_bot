@@ -241,7 +241,7 @@ async def handle_github_webhook(
 
     # ✅ Extract repository name from the webhook payload
     try:
-        repo_name = data.repository.full_name.lower()  # Now correctly accesses `full_name`
+        repo_name = data["repository"]["full_name"].lower()  # Now correctly accesses `full_name`
     except AttributeError:
         raise HTTPException(status_code=400, detail="Missing repository information")
         
