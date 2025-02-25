@@ -169,12 +169,15 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
         message = (
             f"✅ *GitHub Integration Complete!*\n\n"
             f"Your repository `{USER_DATA[chat_id]['github_repo']}` is now connected.\n"
+            f"*Webhook URL:* `https://ag-telegram-bot.onrender.com/notifications/github`\n"
             f"*API Key:* `{USER_DATA[chat_id]['api_key']}`\n\n"
-            f"🔹 *How to Add API Key to GitHub Secrets:*\n"
-            f"1. Go to your repository on GitHub.\n"
-            f"2. Navigate to *Settings* > *Secrets and variables* > *Actions*.\n"
-            f"3. Click *New repository secret*.\n"
-            f"4. Name it `API_TOKEN` and paste the API Key above.\n"
+            f"🔹 *Setup Instructions:*\n"
+            f"1. Go to your repository's settings on GitHub.\n"
+            f"2. Navigate to *Webhooks* > *Add webhook*.\n"
+            f"3. Use the URL above as the *Payload URL*.\n"
+            f"4. Choose `application/json` as content type.\n"
+            f"5. Set your secret to `{api_key}`.\n"
+            f"6. Click *Add webhook*."
             f"5. Save and you're done!"
         )
         await bot.send_message(chat_id, message)
@@ -190,13 +193,13 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 @app.post("/notifications/github")
 async def handle_github_webhook(
     request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Security(security),  # Allow None (for ping)
     db: Session = Depends(get_db)
 ):
     """Handles GitHub webhook notifications"""
 
     # ✅ Extract event type from headers
     event_type = request.headers.get("X-GitHub-Event", "").lower()
+    webhook_secret = request.headers.get("X-Hub-Signature-256", "").replace("sha256=", "")
 
     # ✅ Get the JSON payload
     try:
@@ -208,14 +211,10 @@ async def handle_github_webhook(
     if event_type == "ping":
         return {"status": "ok", "message": "Ping received successfully"}
 
-    # ✅ Enforce authentication for all other events
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
     # ✅ Validate API key
-    integration = db.query(Integration).filter_by(api_key=credentials.credentials).first()
+    integration = db.query(Integration).filter_by(api_key=webhook_secret).first()
     if not integration:
-        raise HTTPException(status_code=401, detail="Invalid API key")
+        raise HTTPException(status_code=401, detail="Invalid Webhook Secret")
 
     # ✅ Parse webhook payload into Pydantic model
     try:
