@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, validator
 import httpx
 import os
 import json
-from sqlalchemy import create_engine, Column, String, Integer
+from sqlalchemy import create_engine, Column, String, Integer, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime
@@ -240,7 +240,9 @@ async def handle_github_webhook(
         
 
     # ✅ Fetch integration details using repo name
-    integration = db.query(Integration).filter_by(github_repo=repo_name).first()
+    integration = db.query(Integration).filter(
+        func.lower(Integration.github_repo) == repo_name.lower()
+    ).first()
     if not integration:
         logging.warning(f"🚨 No matching integration found! Received repo: {repo_name}")
     
