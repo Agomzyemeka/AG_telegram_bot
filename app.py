@@ -192,7 +192,7 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 
     return {"status": "ok"}
 
-def verify_github_signature(request: Request, api_key: str, received_signature: str):
+async def verify_github_signature(request: Request, api_key: str, received_signature: str):
     """✅ Verifies GitHub webhook signature by hashing API key and comparing it"""
     
     if not received_signature or not api_key:
