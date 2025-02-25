@@ -9,6 +9,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime
 import re
+import hmac
+import hashlib
 import logging
 
 # Configure logging
@@ -190,6 +192,25 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 
     return {"status": "ok"}
 
+def verify_github_signature(request: Request, api_key: str, received_signature: str):
+    """✅ Verifies GitHub webhook signature by hashing API key and comparing it"""
+    
+    if not received_signature or not api_key:
+        raise HTTPException(status_code=401, detail="Missing Webhook Secret or Signature")
+
+    # ✅ Compute expected signature using the API key stored in the database
+    payload = request.body()
+    expected_signature = hmac.new(
+        api_key.encode(),  # Use the API key from the DB
+        payload,
+        hashlib.sha256
+    ).hexdigest()
+
+    # ✅ Compare computed signature with received signature
+    if not hmac.compare_digest(expected_signature, received_signature):
+        raise HTTPException(status_code=401, detail="Signature verification failed")
+
+
 @app.post("/notifications/github")
 async def handle_github_webhook(
     request: Request,
@@ -199,32 +220,40 @@ async def handle_github_webhook(
 
     # ✅ Extract event type from headers
     event_type = request.headers.get("X-GitHub-Event", "").lower()
-    webhook_secret = request.headers.get("X-Hub-Signature-256", "").replace("sha256=", "").strip()
+    received_signature = request.headers.get("X-Hub-Signature-256", "").replace("sha256=", "").strip()
 
     # ✅ Get the JSON payload
     try:
         data = await request.json()
-    except json.ValueError:
+    except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     # ✅ Allow "ping" event through WITHOUT authentication
     if event_type == "ping":
         return {"status": "ok", "message": "Ping received successfully"}
 
-    # ✅ Validate API key
-    integration = db.query(Integration).filter_by(api_key=webhook_secret).first()
+    # ✅ Extract repository name from the webhook payload
+    try:
+        repo_name = data.get("repository", {}).get("full_name", "").lower()
+    except AttributeError:
+        raise HTTPException(status_code=400, detail="Missing repository information")
+
+    # ✅ Fetch integration details using repo name
+    integration = db.query(Integration).filter_by(github_repo=repo_name).first()
     if not integration:
-        raise HTTPException(status_code=401, detail="Invalid Webhook Secret")
+        raise HTTPException(status_code=403, detail="No matching integration found for repository")
+
+    # ✅ Extract API key from the integration entry
+    api_key = integration.api_key
+
+    # ✅ Verify GitHub signature using the stored API key
+    verify_github_signature(request, api_key, received_signature)
 
     # ✅ Parse webhook payload into Pydantic model
     try:
         webhook = GitHubWebhook(**data)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid payload: {str(e)}")
-
-    # ✅ Validate repository match
-    if integration.github_repo.lower() != webhook.repository:
-        raise HTTPException(status_code=403, detail="Repository mismatch")
 
     # ✅ Format message for Telegram
     message = (
