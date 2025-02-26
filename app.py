@@ -322,40 +322,24 @@ async def handle_github_webhook(
     # ✅ Format message for Telegram based on event type
     if event_type == "push":
         message = (
-            f"🔔 *GitHub Push Update*
-
-"
-            f"*Repository:* `{webhook.repository}`
-"
-            f"*Branch:* `{webhook.ref}`
-"
-            f"*Pusher:* `{webhook.pusher}`
-"
-            f"*Commits:* {len(webhook.commits)} new commit(s)
-"
-            f"*Head Commit:* `{webhook.head_commit['message']}`
-"
-            f"*Timestamp:* `{webhook.head_commit['timestamp']}`
-"
+            f"🔔 *GitHub Push Update*\n\n"
+            f"*Repository:* `{webhook.repository}`\n"
+            f"*Branch:* `{webhook.ref}`\n"
+            f"*Pusher:* `{webhook.pusher}`\n"
+            f"*Commits:* {len(webhook.commits)} new commit(s)\n"
+            f"*Head Commit:* `{webhook.head_commit['message']}`\n"
+            f"*Timestamp:* `{webhook.head_commit['timestamp']}`\n"
             f"[View Commits](https://github.com/{webhook.repository}/commits/{webhook.ref})"
         )
     elif event_type == "workflow_run":
         message = (
-            f"🔔 *GitHub Workflow Update*
-
-"
-            f"*Repository:* `{webhook.repository}`
-"
-            f"*Workflow:* `{webhook.workflow}`
-"
-            f"*Status:* `{webhook.status}`
-"
-            f"*Triggered by:* `{webhook.actor}`
-"
-            f"*Run:* #{webhook.run_number}
-"
-            f"*Branch:* `{webhook.ref}`
-"
+            f"🔔 *GitHub Workflow Update*\n\n"
+            f"*Repository:* `{webhook.repository}`\n"
+            f"*Workflow:* `{webhook.workflow}`\n"
+            f"*Status:* `{webhook.status}`\n"
+            f"*Triggered by:* `{webhook.actor}`\n"
+            f"*Run:* #{webhook.run_number}\n"
+            f"*Branch:* `{webhook.ref}`\n"
             f"[View Run](https://github.com/{webhook.repository}/actions/runs/{webhook.run_id})"
         )
     elif event_type == "pull_request":
@@ -387,17 +371,11 @@ async def handle_github_webhook(
 
     elif event_type == "issues":
         message = (
-            f"🔔 *GitHub Issue Update*
-
-"
-            f"*Repository:* `{webhook.repository}`
-"
-            f"*Issue Title:* `{webhook.issue['title']}`
-"
-            f"*Author:* `{webhook.issue['user']['login']}`
-"
-            f"*State:* `{webhook.issue['state']}`
-"
+            f"🔔 *GitHub Issue Update*\n\n"
+            f"*Repository:* `{webhook.repository}`\n"
+            f"*Issue Title:* `{webhook.issue['title']}`\n"
+            f"*Author:* `{webhook.issue['user']['login']}`\n"
+            f"*State:* `{webhook.issue['state']}`\n"
             f"[View Issue]({webhook.issue['html_url']})"
         )
     elif event_type == "pull_request_review":
@@ -445,13 +423,9 @@ async def handle_github_webhook(
 
     else:
         message = (
-            f"🔔 *GitHub Event Received*
-
-"
-            f"*Repository:* `{webhook.repository}`
-"
-            f"*Event Type:* `{event_type}`
-"
+            f"🔔 *GitHub Event Received*\n\n"
+            f"*Repository:* `{webhook.repository}`\n"
+            f"*Event Type:* `{event_type}`\n"
             f"[View Repository](https://github.com/{webhook.repository})"
         )
 
