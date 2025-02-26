@@ -188,6 +188,9 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
                     "❌ Invalid API key! Ensure you're entering the correct key linked to your repository.\n"
                     "Try again or type 'none' to generate a new API key."
                 )
+            
+            # ✅ API key is valid, store it before using it
+            USER_DATA[chat_id]["api_key"] = api_key
                 
             # Define integration message **before** using i
             integration_message = (
