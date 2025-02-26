@@ -186,7 +186,7 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
                 f"3. Use the URL above as the *Payload URL*.\n"
                 f"4. Choose `application/json` as content type.\n"
                 f"5. Set your secret to `{api_key}`.\n"
-                f"6. Click *Add webhook*."
+                f"6. Click *Add webhook*. \n\n"
                 f"If you face any issues, contact: `emyagomoh54321@gmail.com`"
             )
             await bot.send_message(chat_id, integration_message)
