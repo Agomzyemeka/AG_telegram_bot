@@ -196,9 +196,11 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
                 "Follow the steps below to set up your webhook in GitHub.\n"
                 "If you encounter any issues, reach out to: emyagomoh54321@gmail.com."
             )
+            
+            await bot.send_message(chat_id, integration_message)
 
         # Send confirmation message
-        message = (
+        integration_message = (
             f"✅ *GitHub Integration Complete!*\n\n"
             f"Your repository `{USER_DATA[chat_id]['github_repo']}` is now connected.\n"
             f"*Webhook URL:* `https://ag-telegram-bot.onrender.com/notifications/github`\n"
@@ -212,7 +214,7 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
             f"6. Click *Add webhook*."
             f"If you face any issues, contact: `emyagomoh54321@gmail.com`"
         )
-        await bot.send_message(chat_id, message)
+        await bot.send_message(chat_id, integration_message)
 
         # Cleanup user data
         del USER_STATES[chat_id]
