@@ -11,7 +11,7 @@ from datetime import datetime
 import re
 import logging
 
-#testing bot 2
+#I am testing bot notification
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
