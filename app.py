@@ -383,7 +383,7 @@ async def handle_github_webhook(
 
     # ✅ Format message for Telegram based on event type
     if event_type == "push":
-        pusher = webhook.pusher.get("name", "Unknown") if webhook.pusher else "Unknown"
+        pusher = webhook.pusher.name if webhook.pusher else "Unknown"
         message = (
             f"🔔 *GitHub Push Update*\n\n"
             f"*Repository:* `{webhook.repository}`\n"
