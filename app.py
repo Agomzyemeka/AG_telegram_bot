@@ -226,7 +226,7 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
             # API key is valid and already stored
             await bot.send_message(
                 chat_id, 
-                "✅ Your API key is valid, and your repository is fully connected!\n\n"
+                "✅ Your API key is valid !\n\n"
                 "Follow the steps below to set up your webhook in GitHub.\n"
                 "If you encounter any issues, reach out to: emyagomoh54321@gmail.com."
             )
