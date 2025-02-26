@@ -141,7 +141,8 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 
     logging.info(f"Received message: {text} from chat_id: {chat_id} (State: {state})")
 
-    if text == "/start":
+    # Start trigger
+    if text in ["/start", "hi", "hello"]:
         USER_STATES[chat_id] = "waiting_for_repo"
         return await bot.send_message(chat_id, "Welcome to *AG Telegram Bot*!\n\nEnter your GitHub repository in the format: `username/repository_name`.\n\nExample: `agomzy/awesome-project`")
 
@@ -159,19 +160,42 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 
     elif state == "waiting_for_api_key":
         if text.lower() == "none":
+            # Generate a new API key
             api_key = os.urandom(16).hex()
             USER_DATA[chat_id]["api_key"] = api_key
+    
+            # ✅ Save new integration to the database
+            new_integration = Integration(
+                github_repo=USER_DATA[chat_id]["github_repo"],
+                chat_id=chat_id,
+                api_key=api_key
+            )
+            db.add(new_integration)
+            db.commit()
+    
         else:
-            USER_DATA[chat_id]["api_key"] = text
-
-        # Save integration to the database
-        new_integration = Integration(
-            github_repo=USER_DATA[chat_id]["github_repo"],
-            chat_id=chat_id,
-            api_key=USER_DATA[chat_id]["api_key"]
-        )
-        db.add(new_integration)
-        db.commit()
+            api_key = text
+    
+            # ✅ Validate API key against database
+            integration = db.query(Integration).filter(
+                Integration.github_repo == USER_DATA[chat_id]["github_repo"],
+                Integration.api_key == api_key
+            ).first()
+    
+            if not integration:
+                return await bot.send_message(
+                    chat_id, 
+                    "❌ Invalid API key! Ensure you're entering the correct key linked to your repository.\n"
+                    "Try again or type 'none' to generate a new API key."
+                )
+    
+            # API key is valid and already stored
+            return await bot.send_message(
+                chat_id, 
+                "✅ Your API key is valid, and your repository is fully connected!\n\n"
+                "Follow the steps below to set up your webhook in GitHub.\n"
+                "If you encounter any issues, reach out to: emyagomoh54321@gmail.com."
+            )
 
         # Send confirmation message
         message = (
@@ -186,7 +210,7 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
             f"4. Choose `application/json` as content type.\n"
             f"5. Set your secret to `{api_key}`.\n"
             f"6. Click *Add webhook*."
-            f"5. Save and you're done!"
+            f"If you face any issues, contact: `emyagomoh54321@gmail.com`"
         )
         await bot.send_message(chat_id, message)
 
