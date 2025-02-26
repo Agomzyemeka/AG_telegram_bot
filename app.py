@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Security, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, validator
+from datetime import datetime
 import httpx
 import os
 import json
@@ -318,17 +319,141 @@ async def handle_github_webhook(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid payload: {str(e)}")
 
-    # ✅ Format message for Telegram
-    message = (
-        f"🔔 *GitHub Workflow Update*\n\n"
-        f"*Repository:* `{webhook.repository}`\n"
-        f"*Workflow:* `{webhook.workflow}`\n"
-        f"*Status:* `{webhook.status}`\n"
-        f"*Triggered by:* `{webhook.actor}`\n"
-        f"*Run:* #{webhook.run_number}\n"
-        f"*Branch:* `{webhook.ref}`\n\n"
-        f"[View Run](https://github.com/{webhook.repository}/actions/runs/{webhook.run_id})"
-    )
+    # ✅ Format message for Telegram based on event type
+    if event_type == "push":
+        message = (
+            f"🔔 *GitHub Push Update*
+
+"
+            f"*Repository:* `{webhook.repository}`
+"
+            f"*Branch:* `{webhook.ref}`
+"
+            f"*Pusher:* `{webhook.pusher}`
+"
+            f"*Commits:* {len(webhook.commits)} new commit(s)
+"
+            f"*Head Commit:* `{webhook.head_commit['message']}`
+"
+            f"*Timestamp:* `{webhook.head_commit['timestamp']}`
+"
+            f"[View Commits](https://github.com/{webhook.repository}/commits/{webhook.ref})"
+        )
+    elif event_type == "workflow_run":
+        message = (
+            f"🔔 *GitHub Workflow Update*
+
+"
+            f"*Repository:* `{webhook.repository}`
+"
+            f"*Workflow:* `{webhook.workflow}`
+"
+            f"*Status:* `{webhook.status}`
+"
+            f"*Triggered by:* `{webhook.actor}`
+"
+            f"*Run:* #{webhook.run_number}
+"
+            f"*Branch:* `{webhook.ref}`
+"
+            f"[View Run](https://github.com/{webhook.repository}/actions/runs/{webhook.run_id})"
+        )
+    elif event_type == "pull_request":
+        pr_action = webhook.action
+        pr_state = webhook.pull_request['state']
+        merged = webhook.pull_request.get('merged', False)  # Check if the PR was merged
+        merger = webhook.pull_request['merged_by']['login'] if merged else None
+        
+        if pr_action == "closed" and merged:
+            message = (
+                f"🚀 *Pull Request Merged!*\n\n"
+                f"*Repository:* `{webhook.repository}`\n"
+                f"*PR Title:* `{webhook.pull_request['title']}`\n"
+                f"*Merged by:* `{merger}`\n"
+                f"*Source Branch:* `{webhook.pull_request['head']['ref']}`\n"
+                f"*Target Branch:* `{webhook.pull_request['base']['ref']}`\n"
+                f"[View Merge]({webhook.pull_request['html_url']})"
+            )
+        else:
+            message = (
+                f"🔔 *GitHub Pull Request {pr_action.capitalize()}*\n\n"
+                f"*Repository:* `{webhook.repository}`\n"
+                f"*PR Title:* `{webhook.pull_request['title']}`\n"
+                f"*Author:* `{webhook.pull_request['user']['login']}`\n"
+                f"*State:* `{pr_state}`\n"
+                f"*Branch:* `{webhook.pull_request['head']['ref']}` → `{webhook.pull_request['base']['ref']}`\n"
+                f"[View Pull Request]({webhook.pull_request['html_url']})"
+            )
+
+    elif event_type == "issues":
+        message = (
+            f"🔔 *GitHub Issue Update*
+
+"
+            f"*Repository:* `{webhook.repository}`
+"
+            f"*Issue Title:* `{webhook.issue['title']}`
+"
+            f"*Author:* `{webhook.issue['user']['login']}`
+"
+            f"*State:* `{webhook.issue['state']}`
+"
+            f"[View Issue]({webhook.issue['html_url']})"
+        )
+    elif event_type == "pull_request_review":
+        review_state = webhook.pull_request_review['state'].lower()
+        reviewer = webhook.pull_request_review['user']['login']
+        review_comment = webhook.pull_request_review.get('body', 'No additional comments.')
+        
+        # Convert timestamp into readable format
+        raw_time = webhook.pull_request_review['submitted_at']
+        review_time = datetime.strptime(raw_time, "%Y-%m-%dT%H:%M:%SZ").strftime("%B %d, %Y at %I:%M %p UTC")
+    
+        if review_state == "approved":
+            message = (
+                f"✅ *Pull Request Approved!*\n\n"
+                f"*Repository:* `{webhook.repository}`\n"
+                f"*PR Title:* `{webhook.pull_request['title']}`\n"
+                f"*Approved by:* `{reviewer}`\n"
+                f"*Branch:* `{webhook.pull_request['head']['ref']}` → `{webhook.pull_request['base']['ref']}`\n"
+                f"*Review Time:* `{review_time}`\n"
+                f"[View PR]({webhook.pull_request['html_url']})"
+            )
+    
+        elif review_state == "changes_requested":
+            message = (
+                f"⚠️ *Changes Requested on Pull Request*\n\n"
+                f"*Repository:* `{webhook.repository}`\n"
+                f"*PR Title:* `{webhook.pull_request['title']}`\n"
+                f"*Reviewer:* `{reviewer}`\n"
+                f"*Requested Changes:* `{review_comment}`\n"
+                f"*Review Time:* `{review_time}`\n"
+                f"[View PR]({webhook.pull_request['html_url']})"
+            )
+    
+        else:  # Handles "commented" or any other state
+            message = (
+                f"💬 *Pull Request Review Submitted*\n\n"
+                f"*Repository:* `{webhook.repository}`\n"
+                f"*PR Title:* `{webhook.pull_request['title']}`\n"
+                f"*Reviewed by:* `{reviewer}`\n"
+                f"*Review State:* `{review_state}`\n"
+                f"*Comments:* `{review_comment}`\n"
+                f"*Review Time:* `{review_time}`\n"
+                f"[View PR]({webhook.pull_request['html_url']})"
+            )
+
+    else:
+        message = (
+            f"🔔 *GitHub Event Received*
+
+"
+            f"*Repository:* `{webhook.repository}`
+"
+            f"*Event Type:* `{event_type}`
+"
+            f"[View Repository](https://github.com/{webhook.repository})"
+        )
 
     await bot.send_message(integration.chat_id, message)
 
