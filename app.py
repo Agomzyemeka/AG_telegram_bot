@@ -142,6 +142,7 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
     logging.info(f"Received message: {text} from chat_id: {chat_id} (State: {state})")
 
     # Start trigger
+    text = text.lower()  # Convert to lowercase before comparison
     if text in ["/start", "hi", "hello"]:
         USER_STATES[chat_id] = "waiting_for_repo"
         return await bot.send_message(chat_id, "Welcome to *AG Telegram Bot*!\n\nEnter your GitHub repository in the format: `username/repository_name`.\n\nExample: `agomzy/awesome-project`")
