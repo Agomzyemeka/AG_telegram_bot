@@ -188,6 +188,22 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
                     "❌ Invalid API key! Ensure you're entering the correct key linked to your repository.\n"
                     "Try again or type 'none' to generate a new API key."
                 )
+                
+            # Define integration message **before** using i
+            integration_message = (
+                f"✅ *GitHub Integration Complete!*\n\n"
+                f"Your repository `{USER_DATA[chat_id]['github_repo']}` is now connected.\n"
+                f"*Webhook URL:* `https://ag-telegram-bot.onrender.com/notifications/github`\n"
+                f"*API Key:* `{USER_DATA[chat_id]['api_key']}`\n\n"
+                f"🔹 *Setup Instructions:*\n"
+                f"1. Go to your repository's settings on GitHub.\n"
+                f"2. Navigate to *Webhooks* > *Add webhook*.\n"
+                f"3. Use the URL above as the *Payload URL*.\n"
+                f"4. Choose `application/json` as content type.\n"
+                f"5. Set your secret to `{api_key}`.\n"
+                f"6. Click *Add webhook*."
+                f"If you face any issues, contact: `emyagomoh54321@gmail.com`"
+            )
     
             # API key is valid and already stored
             await bot.send_message(
@@ -200,20 +216,6 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
             await bot.send_message(chat_id, integration_message)
 
         # Send confirmation message
-        integration_message = (
-            f"✅ *GitHub Integration Complete!*\n\n"
-            f"Your repository `{USER_DATA[chat_id]['github_repo']}` is now connected.\n"
-            f"*Webhook URL:* `https://ag-telegram-bot.onrender.com/notifications/github`\n"
-            f"*API Key:* `{USER_DATA[chat_id]['api_key']}`\n\n"
-            f"🔹 *Setup Instructions:*\n"
-            f"1. Go to your repository's settings on GitHub.\n"
-            f"2. Navigate to *Webhooks* > *Add webhook*.\n"
-            f"3. Use the URL above as the *Payload URL*.\n"
-            f"4. Choose `application/json` as content type.\n"
-            f"5. Set your secret to `{api_key}`.\n"
-            f"6. Click *Add webhook*."
-            f"If you face any issues, contact: `emyagomoh54321@gmail.com`"
-        )
         await bot.send_message(chat_id, integration_message)
 
         # Cleanup user data
