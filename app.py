@@ -191,14 +191,12 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
                 
             # Define integration message **before** using i
             integration_message = (
-                f"✅ *GitHub Integration Complete!*\n\n"
-                f"Your repository `{USER_DATA[chat_id]['github_repo']}` is now connected.\n"
-                f"*Webhook URL:* `https://ag-telegram-bot.onrender.com/notifications/github`\n"
-                f"*API Key:* `{USER_DATA[chat_id]['api_key']}`\n\n"
-                f"🔹 *Setup Instructions:*\n"
+                f"✅ *GitHub Integration Verified!*\n\n"
+
+                f"🔹 *Follow The Instructions To Setup in *GITHUB* :*\n"
                 f"1. Go to your repository's settings on GitHub.\n"
                 f"2. Navigate to *Webhooks* > *Add webhook*.\n"
-                f"3. Use the URL above as the *Payload URL*.\n"
+                f"3. Use the URL: `https://ag-telegram-bot.onrender.com/notifications/github` as the *Payload URL*.\n"
                 f"4. Choose `application/json` as content type.\n"
                 f"5. Set your secret to `{api_key}`.\n"
                 f"6. Click *Add webhook*."
