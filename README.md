@@ -1,12 +1,14 @@
 # AG Telegram Bot - GitHub Actions Notifier  
 
-AG Telegram Bot (`agomzy_telegram_bot`) is a FastAPI-based application that integrates GitHub Actions with Telegram, allowing users to receive real-time workflow notifications from their repositories.  
+AG Telegram Bot (`agomzy_telegram_bot`) is a FastAPI-based application that integrates GitHub Actions/Events with Telegram, allowing users to receive real-time notifications from their connected repositories.  
+
+The bot can be added to developer group chats to give real time updates/notifications to members of the team. 
 
 ## Features  
-✅ Receive GitHub Actions notifications on Telegram.  
+✅ Receive GitHub Event notifications on Telegram.  
 ✅ Secure authentication using API keys.  
 ✅ Validate GitHub repository format and existence.  
-✅ Easy setup with `/start` command.  
+✅ Easy setup with `/start or Hi or Hello`command.  
 ✅ Stores integration details in a database.  
 
 ---
@@ -25,6 +27,7 @@ Create a `.env` file and add the following environment variables:
 ```env
 DATABASE_URL=your_database_url
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+GITHUB_TOKEN=your_github_token
 PORT=8000
 ```
 
@@ -58,10 +61,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 ## 🛠️ Setting Up GitHub Webhook  
 
 1. Go to your GitHub repository settings.  
-2. Navigate to **Settings** → **Secrets and variables** → **Actions** → **Repository secrets**.  
-3. Click **New repository secret** and add:  
-   - `API_TOKEN`: Your API key from the bot.  
-4. Navigate to **Webhooks** and add:  
+2.  Navigate to **Webhooks** and add:  
    - **Payload URL:** `https://your-server-url.com/notifications/github`  
    - **Content Type:** `application/json`  
    - **Secret:** Your API token  
@@ -72,14 +72,14 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 1️⃣ Start the bot in Telegram by sending:  
 ```
-/start
+"/start" or "Hi" or "Hello"
 ```
 2️⃣ Enter your GitHub repository name in the format:  
 ```
 agomzy/awesome-project
 ```
 3️⃣ If the repository exists, you'll be prompted to enter an API key or generate one.  
-4️⃣ Once setup is complete, you'll receive GitHub workflow notifications in your Telegram chat.  
+4️⃣ Once setup is complete, you'll receive GitHub event notifications in your Telegram chat.  
 
 ---
 
