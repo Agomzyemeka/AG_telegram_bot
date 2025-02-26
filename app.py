@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, Column, String, Integer, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime
+from typing import Optional, List, Dict, Any
 import re
 import hmac
 import hashlib
@@ -58,15 +59,76 @@ class RepositoryInfo(BaseModel):
             raise ValueError("Invalid repository format. Expected format: username/repository_name")
         return v
 
-# Main Webhook Model
+# ✅ Repository Information
+class RepositoryInfo(BaseModel):
+    full_name: str
+
+    @validator("full_name")
+    def validate_full_name(cls, v):
+        if not re.match(r"^[a-zA-Z0-9-_]+/[a-zA-Z0-9-_]+$", v):
+            raise ValueError("Invalid repository format. Expected format: username/repository_name")
+        return v
+
+
+# ✅ Commit Information
+class CommitInfo(BaseModel):
+    id: str
+    message: str
+    timestamp: str
+    url: str
+
+
+# ✅ Pusher Information
+class PusherInfo(BaseModel):
+    name: str
+
+
+# ✅ Pull Request Information
+class PullRequestInfo(BaseModel):
+    title: str
+    state: str
+    merged: Optional[bool] = False
+    merged_by: Optional[Dict[str, str]] = None
+    user: Dict[str, str]
+    head: Dict[str, str]
+    base: Dict[str, str]
+    html_url: str
+
+
+# ✅ Issue Information
+class IssueInfo(BaseModel):
+    title: str
+    state: str
+    user: Dict[str, str]
+    html_url: str
+
+
+# ✅ Review Information
+class ReviewInfo(BaseModel):
+    state: str
+    user: Dict[str, str]
+    body: Optional[str] = None
+    submitted_at: str
+
+
+# ✅ Main GitHub Webhook Model
 class GitHubWebhook(BaseModel):
-    repository: RepositoryInfo  # Accepts a dictionary, not a string
-    workflow: str | None = None  # Allow missing fields to be optional
-    status: str | None = None
-    actor: str | None = None
-    run_id: str | None = None
-    run_number: str | None = None
-    ref: str | None = None
+    repository: RepositoryInfo
+    ref: Optional[str] = None
+    workflow: Optional[str] = None
+    status: Optional[str] = None
+    actor: Optional[str] = None
+    run_id: Optional[str] = None
+    run_number: Optional[str] = None
+
+    # Event-specific fields
+    pusher: Optional[PusherInfo] = None
+    commits: Optional[List[CommitInfo]] = []
+    head_commit: Optional[CommitInfo] = None
+
+    pull_request: Optional[PullRequestInfo] = None
+    issue: Optional[IssueInfo] = None
+    pull_request_review: Optional[ReviewInfo] = None
     
     
 # Telegram bot class to send messages
@@ -321,7 +383,7 @@ async def handle_github_webhook(
 
     # ✅ Format message for Telegram based on event type
     if event_type == "push":
-        pusher = data.get("pusher", {}).get("name", "Unknown")
+        pusher = webhook.get("pusher", {}).get("name", "Unknown")
         message = (
             f"🔔 *GitHub Push Update*\n\n"
             f"*Repository:* `{webhook.repository}`\n"
