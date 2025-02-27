@@ -118,6 +118,7 @@ class GitHubWebhook(BaseModel):
     actor: Optional[Dict[str, Any]] = None  # Ensure actor is a dictionary, not a string
     run_id: Optional[int] = None  # GitHub provides this as an integer
     run_number: Optional[int] = None  # GitHub provides this as an integer
+    action: Optional[str] = None  # ✅ Fix: Add action field
 
     # Event-specific fields
     pusher: Optional[PusherInfo] = None
