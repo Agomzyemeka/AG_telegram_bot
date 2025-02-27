@@ -49,19 +49,10 @@ class Integration(Base):
 Base.metadata.create_all(bind=engine)
 
 # Pydantic model for handling GitHub webhook payload
-# Model for repository details
-class RepositoryInfo(BaseModel):
-    full_name: str
-
-    @validator("full_name")
-    def validate_full_name(cls, v):
-        if not re.match(r"^[a-zA-Z0-9-_]+/[a-zA-Z0-9-_]+$", v):
-            raise ValueError("Invalid repository format. Expected format: username/repository_name")
-        return v
-
 # ✅ Repository Information
 class RepositoryInfo(BaseModel):
     full_name: str
+    id: int  # Added to match GitHub's payload
 
     @validator("full_name")
     def validate_full_name(cls, v):
@@ -76,11 +67,13 @@ class CommitInfo(BaseModel):
     message: str
     timestamp: str
     url: str
+    author: Dict[str, Any]  # Ensure author structure is correct
 
 
 # ✅ Pusher Information
 class PusherInfo(BaseModel):
     name: str
+    email: Optional[str] = None  # Added since GitHub usually includes email
 
 
 # ✅ Pull Request Information
@@ -88,27 +81,32 @@ class PullRequestInfo(BaseModel):
     title: str
     state: str
     merged: Optional[bool] = False
-    merged_by: Optional[Dict[str, str]] = None
-    user: Dict[str, str]
-    head: Dict[str, str]
-    base: Dict[str, str]
+    merged_by: Optional[Dict[str, Any]] = None  # Ensure correct user format
+    user: Dict[str, Any]  # Ensure this is a user dictionary, not a string
+    head: Dict[str, Any]  # Ensure this is a dict, not a string
+    base: Dict[str, Any]  # Ensure this is a dict, not a string
     html_url: str
+    number: int  # Added to match GitHub's payload
+    id: int  # GitHub provides an ID for the PR
 
 
 # ✅ Issue Information
 class IssueInfo(BaseModel):
     title: str
     state: str
-    user: Dict[str, str]
+    user: Dict[str, Any]  # Ensure this is a user dictionary
     html_url: str
+    number: int  # Added to match GitHub's payload
+    id: int  # Added to match GitHub's payload
 
 
 # ✅ Review Information
 class ReviewInfo(BaseModel):
     state: str
-    user: Dict[str, str]
+    user: Dict[str, Any]  # Ensure this is a user dictionary
     body: Optional[str] = None
     submitted_at: str
+    id: int  # GitHub provides an ID for the review
 
 
 # ✅ Main GitHub Webhook Model
@@ -117,9 +115,9 @@ class GitHubWebhook(BaseModel):
     ref: Optional[str] = None
     workflow: Optional[str] = None
     status: Optional[str] = None
-    actor: Optional[str] = None
-    run_id: Optional[str] = None
-    run_number: Optional[str] = None
+    actor: Optional[Dict[str, Any]] = None  # Ensure actor is a dictionary, not a string
+    run_id: Optional[int] = None  # GitHub provides this as an integer
+    run_number: Optional[int] = None  # GitHub provides this as an integer
 
     # Event-specific fields
     pusher: Optional[PusherInfo] = None
@@ -129,7 +127,6 @@ class GitHubWebhook(BaseModel):
     pull_request: Optional[PullRequestInfo] = None
     issue: Optional[IssueInfo] = None
     pull_request_review: Optional[ReviewInfo] = None
-    
     
 # Telegram bot class to send messages
 class TelegramBot:
