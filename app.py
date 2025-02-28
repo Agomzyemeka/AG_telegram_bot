@@ -74,6 +74,9 @@ class CommitInfo(BaseModel):
 class PusherInfo(BaseModel):
     name: str
     email: Optional[str] = None  # Added since GitHub usually includes email
+    
+class UserInfo(BaseModel):
+    login: str
 
 
 # ✅ Pull Request Information
@@ -82,7 +85,7 @@ class PullRequestInfo(BaseModel):
     state: str
     merged: Optional[bool] = False
     merged_by: Optional[Dict[str, Any]] = None  # Ensure correct user format
-    user: Dict[str, Any]  # Ensure this is a user dictionary, not a string
+    user: UserInfo  # ✅ Change from Dict[str, Any] to UserInfo
     head: Dict[str, Any]  # Ensure this is a dict, not a string
     base: Dict[str, Any]  # Ensure this is a dict, not a string
     html_url: str
@@ -94,7 +97,7 @@ class PullRequestInfo(BaseModel):
 class IssueInfo(BaseModel):
     title: str
     state: str
-    user: Dict[str, Any]  # Ensure this is a user dictionary
+    user: UserInfo  # ✅ Change from Dict[str, Any] to UserInfo
     html_url: str
     number: int  # Added to match GitHub's payload
     id: int  # Added to match GitHub's payload
@@ -103,7 +106,7 @@ class IssueInfo(BaseModel):
 # ✅ Review Information
 class ReviewInfo(BaseModel):
     state: str
-    user: Dict[str, Any]  # Ensure this is a user dictionary
+    user: UserInfo  # ✅ Change from Dict[str, Any] to UserInfo
     body: Optional[str] = None
     submitted_at: str
     id: int  # GitHub provides an ID for the review
