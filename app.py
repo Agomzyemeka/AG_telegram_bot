@@ -84,7 +84,7 @@ class PullRequestInfo(BaseModel):
     title: str
     state: str
     merged: Optional[bool] = False
-    merged_by: Optional[Dict[str, Any]] = None  # Ensure correct user format
+    merged_by: Optional[UserInfo] = None  # ✅ Convert merged_by to UserInfo model
     user: UserInfo  # ✅ Change from Dict[str, Any] to UserInfo
     head: Dict[str, Any]  # Ensure this is a dict, not a string
     base: Dict[str, Any]  # Ensure this is a dict, not a string
