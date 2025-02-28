@@ -78,6 +78,10 @@ class PusherInfo(BaseModel):
 class UserInfo(BaseModel):
     login: str
 
+class BranchInfo(BaseModel):
+    ref: str
+    sha: str
+    repo: Dict[str, Any]  # Or create a model if needed
 
 # ✅ Pull Request Information
 class PullRequestInfo(BaseModel):
@@ -86,8 +90,8 @@ class PullRequestInfo(BaseModel):
     merged: Optional[bool] = False
     merged_by: Optional[UserInfo] = None  # ✅ Convert merged_by to UserInfo model
     user: UserInfo  # ✅ Change from Dict[str, Any] to UserInfo
-    head: Dict[str, Any]  # Ensure this is a dict, not a string
-    base: Dict[str, Any]  # Ensure this is a dict, not a string
+    head: BranchInfo  # Convert `head` to a model
+    base: BranchInfo  # Convert `base` to a model
     html_url: str
     number: int  # Added to match GitHub's payload
     id: int  # GitHub provides an ID for the PR
