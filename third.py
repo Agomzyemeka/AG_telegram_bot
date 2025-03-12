@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Security, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, validator
+from datetime import datetime
 import httpx
 import os
 import json
@@ -8,12 +9,11 @@ from sqlalchemy import create_engine, Column, String, Integer, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime
+from typing import Optional, List, Dict, Any
 import re
 import hmac
 import hashlib
 import logging
-
-#test line
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -49,9 +49,10 @@ class Integration(Base):
 Base.metadata.create_all(bind=engine)
 
 # Pydantic model for handling GitHub webhook payload
-# Model for repository details
+# ✅ Repository Information
 class RepositoryInfo(BaseModel):
     full_name: str
+    id: int  # Added to match GitHub's payload
 
     @validator("full_name")
     def validate_full_name(cls, v):
@@ -59,16 +60,81 @@ class RepositoryInfo(BaseModel):
             raise ValueError("Invalid repository format. Expected format: username/repository_name")
         return v
 
-# Main Webhook Model
-class GitHubWebhook(BaseModel):
-    repository: RepositoryInfo  # Accepts a dictionary, not a string
-    workflow: str | None = None  # Allow missing fields to be optional
-    status: str | None = None
-    actor: str | None = None
-    run_id: str | None = None
-    run_number: str | None = None
-    ref: str | None = None
+
+# ✅ Commit Information
+class CommitInfo(BaseModel):
+    id: str
+    message: str
+    timestamp: str
+    url: str
+    author: Dict[str, Any]  # Ensure author structure is correct
+
+
+# ✅ Pusher Information
+class PusherInfo(BaseModel):
+    name: str
+    email: Optional[str] = None  # Added since GitHub usually includes email
     
+class UserInfo(BaseModel):
+    login: str
+
+class BranchInfo(BaseModel):
+    ref: str
+    sha: str
+    repo: Dict[str, Any]  # Or create a model if needed
+
+# ✅ Pull Request Information
+class PullRequestInfo(BaseModel):
+    title: str
+    state: str
+    merged: Optional[bool] = False
+    merged_by: Optional[UserInfo] = None  # ✅ Convert merged_by to UserInfo model
+    user: UserInfo  # ✅ Change from Dict[str, Any] to UserInfo
+    head: BranchInfo  # Convert `head` to a model
+    base: BranchInfo  # Convert `base` to a model
+    html_url: str
+    number: int  # Added to match GitHub's payload
+    id: int  # GitHub provides an ID for the PR
+
+
+# ✅ Issue Information
+class IssueInfo(BaseModel):
+    title: str
+    state: str
+    user: UserInfo  # ✅ Change from Dict[str, Any] to UserInfo
+    html_url: str
+    number: int  # Added to match GitHub's payload
+    id: int  # Added to match GitHub's payload
+
+
+# ✅ Review Information
+class ReviewInfo(BaseModel):
+    state: str
+    user: UserInfo  # ✅ Change from Dict[str, Any] to UserInfo
+    body: Optional[str] = None
+    submitted_at: str
+    id: int  # GitHub provides an ID for the review
+
+
+# ✅ Main GitHub Webhook Model
+class GitHubWebhook(BaseModel):
+    repository: RepositoryInfo
+    ref: Optional[str] = None
+    workflow: Optional[str] = None
+    status: Optional[str] = None
+    actor: Optional[Dict[str, Any]] = None  # Ensure actor is a dictionary, not a string
+    run_id: Optional[int] = None  # GitHub provides this as an integer
+    run_number: Optional[int] = None  # GitHub provides this as an integer
+    action: Optional[str] = None  # ✅ Fix: Add action field
+
+    # Event-specific fields
+    pusher: Optional[PusherInfo] = None
+    commits: Optional[List[CommitInfo]] = []
+    head_commit: Optional[CommitInfo] = None
+
+    pull_request: Optional[PullRequestInfo] = None
+    issue: Optional[IssueInfo] = None
+    pull_request_review: Optional[ReviewInfo] = None
     
 # Telegram bot class to send messages
 class TelegramBot:
@@ -143,7 +209,9 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 
     logging.info(f"Received message: {text} from chat_id: {chat_id} (State: {state})")
 
-    if text == "/start":
+    # Start trigger
+    # text = text.lower()  # Convert to lowercase before comparison
+    if text in ["/start", "Hi", "Hello"]:
         USER_STATES[chat_id] = "waiting_for_repo"
         return await bot.send_message(chat_id, "Welcome to *AG Telegram Bot*!\n\nEnter your GitHub repository in the format: `username/repository_name`.\n\nExample: `agomzy/awesome-project`")
 
@@ -161,36 +229,78 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
 
     elif state == "waiting_for_api_key":
         if text.lower() == "none":
+            # Generate a new API key
             api_key = os.urandom(16).hex()
             USER_DATA[chat_id]["api_key"] = api_key
+    
+            # ✅ Save new integration to the database
+            new_integration = Integration(
+                github_repo=USER_DATA[chat_id]["github_repo"],
+                chat_id=chat_id,
+                api_key=api_key
+            )
+            db.add(new_integration)
+            db.commit()
+            
+            # Send confirmation message
+            integration_message = (
+                f"✅ *GitHub Integration Complete!*\n\n"
+                f"Your repository `{USER_DATA[chat_id]['github_repo']}` is now connected.\n"
+                f"*Webhook URL:* `https://ag-telegram-bot.onrender.com/notifications/github`\n"
+                f"*API Key:* `{USER_DATA[chat_id]['api_key']}`\n\n"
+                f"🔹 *Setup Instructions:*\n"
+                f"1. Go to your repository's settings on GitHub.\n"
+                f"2. Navigate to *Webhooks* > *Add webhook*.\n"
+                f"3. Use the URL above as the *Payload URL*.\n"
+                f"4. Choose `application/json` as content type.\n"
+                f"5. Set your secret to `{api_key}`.\n"
+                f"6. Click *Add webhook*. \n\n"
+                f"If you face any issues, contact: `emyagomoh54321@gmail.com`"
+            )
+            await bot.send_message(chat_id, integration_message)
+    
         else:
-            USER_DATA[chat_id]["api_key"] = text
+            api_key = text
+    
+            # ✅ Validate API key against database
+            integration = db.query(Integration).filter(
+                Integration.github_repo == USER_DATA[chat_id]["github_repo"],
+                Integration.api_key == api_key
+            ).first()
+    
+            if not integration:
+                return await bot.send_message(
+                    chat_id, 
+                    "❌ Invalid API key! Ensure you're entering the correct key linked to your repository.\n"
+                    "Try again or type 'none' to generate a new API key."
+                )
+            
+            # ✅ API key is valid, store it before using it
+            USER_DATA[chat_id]["api_key"] = api_key
+                
+            # Define integration message **before** using i
+            integration_message = (
+                f"🔹 *Follow The Instructions To Setup in GITHUB :*\n\n"
+                f"1. Go to your repository's settings on GitHub.\n"
+                f"2. Navigate to *Webhooks* > *Add webhook*.\n"
+                f"3. Use the URL: `https://ag-telegram-bot.onrender.com/notifications/github` as the *Payload URL*.\n"
+                f"4. Choose `application/json` as content type.\n"
+                f"5. Set your secret to `{api_key}`.\n"
+                f"6. Click *Add webhook*.\n"
+                f"If you face any issues, contact: `emyagomoh54321@gmail.com`"
+            )
+    
+            # API key is valid and already stored
+            await bot.send_message(
+                chat_id, 
+                "✅ Your API key is valid !\n\n"
+                "Follow the steps below to set up your webhook in GitHub.\n"
+                "If you encounter any issues, reach out to: emyagomoh54321@gmail.com."
+            )
+            
+            await bot.send_message(chat_id, integration_message)
 
-        # Save integration to the database
-        new_integration = Integration(
-            github_repo=USER_DATA[chat_id]["github_repo"],
-            chat_id=chat_id,
-            api_key=USER_DATA[chat_id]["api_key"]
-        )
-        db.add(new_integration)
-        db.commit()
 
-        # Send confirmation message
-        message = (
-            f"✅ *GitHub Integration Complete!*\n\n"
-            f"Your repository `{USER_DATA[chat_id]['github_repo']}` is now connected.\n"
-            f"*Webhook URL:* `https://ag-telegram-bot.onrender.com/notifications/github`\n"
-            f"*API Key:* `{USER_DATA[chat_id]['api_key']}`\n\n"
-            f"🔹 *Setup Instructions:*\n"
-            f"1. Go to your repository's settings on GitHub.\n"
-            f"2. Navigate to *Webhooks* > *Add webhook*.\n"
-            f"3. Use the URL above as the *Payload URL*.\n"
-            f"4. Choose `application/json` as content type.\n"
-            f"5. Set your secret to `{api_key}`.\n"
-            f"6. Click *Add webhook*."
-            f"5. Save and you're done!"
-        )
-        await bot.send_message(chat_id, message)
 
         # Cleanup user data
         del USER_STATES[chat_id]
@@ -276,21 +386,121 @@ async def handle_github_webhook(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid payload: {str(e)}")
 
-    # ✅ Format message for Telegram
-    message = (
-        f"🔔 *GitHub Workflow Update*\n\n"
-        f"*Repository:* `{webhook.repository}`\n"
-        f"*Workflow:* `{webhook.workflow}`\n"
-        f"*Status:* `{webhook.status}`\n"
-        f"*Triggered by:* `{webhook.actor}`\n"
-        f"*Run:* #{webhook.run_number}\n"
-        f"*Branch:* `{webhook.ref}`\n\n"
-        f"[View Run](https://github.com/{webhook.repository}/actions/runs/{webhook.run_id})"
-    )
+    # ✅ Format message for Telegram based on event type
+    if event_type == "push":
+        pusher = webhook.pusher.name if webhook.pusher else "Unknown"
+        message = (
+            f"🔔 *GitHub Push Update*\n\n"
+            f"*Repository:* `{webhook.repository.full_name}`\n"
+            f"*Branch:* `{webhook.ref}`\n"
+            f"*Pusher:* `{pusher}`\n"
+            f"*Commits:* {len(webhook.commits)} new commit(s)\n"
+            f"*Head Commit:* `{webhook.head_commit.message}`\n"
+            f"*Timestamp:* `{webhook.head_commit.timestamp}`\n"
+            f"[View Commits](https://github.com/{webhook.repository.full_name}/commits/{webhook.ref})"
+        )
+    elif event_type == "workflow_run":
+        message = (
+            f"🔔 *GitHub Workflow Update*\n\n"
+            f"*Repository:* `{webhook.repository.full_name}`\n"
+            f"*Workflow:* `{webhook.workflow.name}`\n"
+            f"*Status:* `{webhook.workflow.status}`\n"
+            f"*Triggered by:* `{webhook.workflow.actor}`\n"
+            f"*Run:* #{webhook.workflow.run_number}\n"
+            f"*Branch:* `{webhook.ref}`\n"
+            f"[View Run](https://github.com/{webhook.repository.full_name}/actions/runs/{webhook.workflow.run_id})"
+        )
+    elif event_type == "pull_request":
+        pr_action = webhook.action
+        pr_state = webhook.pull_request.state
+        merged = webhook.pull_request.merged
+        merger = webhook.pull_request.merged_by.login if merged else None
+        
+        if pr_action == "closed" and merged:
+            message = (
+                f"🚀 *Pull Request Merged!*\n\n"
+                f"*Repository:* `{webhook.repository.full_name}`\n"
+                f"*PR Title:* `{webhook.pull_request.title}`\n"
+                f"*Merged by:* `{merger}`\n"
+                f"*Source Branch:* `{webhook.pull_request.head.ref}`\n"
+                f"*Target Branch:* `{webhook.pull_request.base.ref}`\n"
+                f"[View Merge]({webhook.pull_request.html_url})"
+            )
+        else:
+            message = (
+                f"🔔 *GitHub Pull Request {pr_action.capitalize()}*\n\n"
+                f"*Repository:* `{webhook.repository.full_name}`\n"
+                f"*PR Title:* `{webhook.pull_request.title}`\n"
+                f"*Author:* `{webhook.pull_request.user.login}`\n"
+                f"*State:* `{pr_state}`\n"
+                f"*Branch:* `{webhook.pull_request.head.ref}` → `{webhook.pull_request.base.ref}`\n"
+                f"[View Pull Request]({webhook.pull_request.html_url})"
+            )
+
+    elif event_type == "issues":
+        message = (
+            f"🔔 *GitHub Issue Update*\n\n"
+            f"*Repository:* `{webhook.repository.full_name}`\n"
+            f"*Issue Title:* `{webhook.issue.title}`\n"
+            f"*Author:* `{webhook.issue.user.login}`\n"
+            f"*State:* `{webhook.issue.state}`\n"
+            f"[View Issue]({webhook.issue.html_url})"
+        )
+    elif event_type == "pull_request_review":
+        review_state = webhook.pull_request_review.state.lower()
+        reviewer = webhook.pull_request_review.user.login
+        review_comment = webhook.pull_request_review.body or "No additional comments."
+        
+        # Convert timestamp into readable format
+        raw_time = webhook.pull_request_review.submitted_at
+        review_time = datetime.strptime(raw_time, "%Y-%m-%dT%H:%M:%SZ").strftime("%B %d, %Y at %I:%M %p UTC")
+    
+        if review_state == "approved":
+            message = (
+                f"✅ *Pull Request Approved!*\n\n"
+                f"*Repository:* `{webhook.repository.full_name}`\n"
+                f"*PR Title:* `{webhook.pull_request.title}`\n"
+                f"*Approved by:* `{reviewer}`\n"
+                f"*Branch:* `{webhook.pull_request.head.ref}` → `{webhook.pull_request.base.ref}`\n"
+                f"*Review Time:* `{review_time}`\n"
+                f"[View PR]({webhook.pull_request.html_url})"
+            )
+    
+        elif review_state == "changes_requested":
+            message = (
+                f"⚠️ *Changes Requested on Pull Request*\n\n"
+                f"*Repository:* `{webhook.repository.full_name}`\n"
+                f"*PR Title:* `{webhook.pull_request.title}`\n"
+                f"*Reviewer:* `{reviewer}`\n"
+                f"*Requested Changes:* `{review_comment}`\n"
+                f"*Review Time:* `{review_time}`\n"
+                f"[View PR]({webhook.pull_request.html_url})"
+            )
+    
+        else:  # Handles "commented" or any other state
+            message = (
+                f"💬 *Pull Request Review Submitted*\n\n"
+                f"*Repository:* `{webhook.repository.full_name}`\n"
+                f"*PR Title:* `{webhook.pull_request.title}`\n"
+                f"*Reviewed by:* `{reviewer}`\n"
+                f"*Review State:* `{review_state}`\n"
+                f"*Comments:* `{review_comment}`\n"
+                f"*Review Time:* `{review_time}`\n"
+                f"[View PR]({webhook.pull_request.html_url})"
+            )
+
+    else:
+        message = (
+            f"🔔 *GitHub Event Received*\n\n"
+            f"*Repository:* `{webhook.repository.full_name}`\n"
+            f"*Event Type:* `{event_type}`\n"
+            f"[View Repository](https://github.com/{webhook.repository.full_name})"
+        )
 
     await bot.send_message(integration.chat_id, message)
 
     return {"status": "success", "message": "Notification sent"}
+
 
 
 if __name__ == "__main__":
