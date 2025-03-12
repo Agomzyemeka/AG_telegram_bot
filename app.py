@@ -115,11 +115,20 @@ class ReviewInfo(BaseModel):
     submitted_at: str
     id: int  # GitHub provides an ID for the review
 
+class CommentInfo(BaseModel):
+    body: str
+    user: UserInfo
+    html_url: str
+    id: int  # GitHub provides an ID for the comment
+
 
 # ✅ Main GitHub Webhook Model
 class GitHubWebhook(BaseModel):
     repository: RepositoryInfo
     ref: Optional[str] = None
+    ref_type: Optional[str] = None  # ✅ Added for create/delete events
+    sender: Optional[UserInfo] = None  # ✅ Added for create/delete events
+    
     workflow: Optional[str] = None
     status: Optional[str] = None
     actor: Optional[Dict[str, Any]] = None  # Ensure actor is a dictionary, not a string
@@ -135,6 +144,7 @@ class GitHubWebhook(BaseModel):
     pull_request: Optional[PullRequestInfo] = None
     issue: Optional[IssueInfo] = None
     pull_request_review: Optional[ReviewInfo] = None
+    comment: Optional[CommentInfo] = None  # ✅ Added for issue_comment event
     
 # Telegram bot class to send messages
 class TelegramBot:
@@ -488,6 +498,37 @@ async def handle_github_webhook(
                 f"*Review Time:* `{review_time}`\n"
                 f"[View PR]({webhook.pull_request.html_url})"
             )
+
+    elif event_type == "create":
+        message = (
+            f"🆕 *New {webhook.ref_type.capitalize()} Created*\n\n"
+            f"*Repository:* `{webhook.repository.full_name}`\n"
+            f"*Ref Type:* `{webhook.ref_type}`\n"
+            f"*Ref Name:* `{webhook.ref}`\n"
+            f"*Created By:* `{webhook.sender.login}`\n"
+            f"[View Repository](https://github.com/{webhook.repository.full_name})"
+        )
+
+    elif event_type == "delete":
+        message = (
+            f"🗑️ *{webhook.ref_type.capitalize()} Deleted*\n\n"
+            f"*Repository:* `{webhook.repository.full_name}`\n"
+            f"*Ref Type:* `{webhook.ref_type}`\n"
+            f"*Ref Name:* `{webhook.ref}`\n"
+            f"*Deleted By:* `{webhook.sender.login}`\n"
+            f"[View Repository](https://github.com/{webhook.repository.full_name})"
+        )
+
+    elif event_type == "issue_comment":
+        message = (
+            f"💬 *New Issue Comment*\n\n"
+            f"*Repository:* `{webhook.repository.full_name}`\n"
+            f"*Issue Title:* `{webhook.issue.title}`\n"
+            f"*Commented By:* `{webhook.comment.user.login}`\n"
+            f"*Comment:* `{webhook.comment.body}`\n"
+            f"[View Comment]({webhook.comment.html_url})"
+        )
+
 
     else:
         message = (
